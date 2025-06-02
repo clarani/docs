@@ -6,6 +6,7 @@ import { CONVERSION_FILE_MAX_SIZE } from '@/env';
 import {
   collaborationResetConnectionsHandler,
   collaborationWSHandler,
+  convertBlocksHandler,
   convertHandler,
   getDocumentConnectionInfoHandler,
 } from '@/handlers';
@@ -59,6 +60,13 @@ export const initApp = () => {
       type: '*/*',
     }),
     convertHandler,
+  );
+
+  app.post(
+    routes.CONVERT_BLOCKS,
+    httpSecurity,
+    express.json(),
+    convertBlocksHandler,
   );
 
   Sentry.setupExpressErrorHandler(app);
