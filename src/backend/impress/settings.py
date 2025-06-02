@@ -514,6 +514,9 @@ class Base(Configuration):
     )
 
     # Frontend
+    FRONTEND_BASE_URL = values.Value(
+        None, environ_name="FRONTEND_BASE_URL", environ_prefix=None
+    )
     FRONTEND_THEME = values.Value(
         None, environ_name="FRONTEND_THEME", environ_prefix=None
     )
@@ -945,6 +948,22 @@ class Base(Configuration):
     NO_WEBSOCKET_CACHE_TIMEOUT = values.Value(
         default=120,
         environ_name="NO_WEBSOCKET_CACHE_TIMEOUT",
+        environ_prefix=None,
+    )
+
+    NOTION_CLIENT_ID = values.Value(
+        default=None,
+        environ_name="NOTION_CLIENT_ID",
+        environ_prefix=None,
+    )
+    NOTION_CLIENT_SECRET = values.Value(
+        default=None,
+        environ_name="NOTION_CLIENT_SECRET",
+        environ_prefix=None,
+    )
+    NOTION_REDIRECT_URI = values.Value(
+        default=None,
+        environ_name="NOTION_REDIRECT_URI",
         environ_prefix=None,
     )
 

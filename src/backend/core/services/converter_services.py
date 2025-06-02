@@ -114,17 +114,24 @@ class YdocConverter:
 
     def _request(self, url, data, content_type, accept):
         """Make a request to the Y-Provider API."""
-        response = requests.post(
-            url,
-            data=data,
-            headers={
+        kwargs = {
+            "url": url,
+            "headers": {
                 "Authorization": self.auth_header,
                 "Content-Type": content_type,
                 "Accept": accept,
             },
-            timeout=settings.CONVERSION_API_TIMEOUT,
-            verify=settings.CONVERSION_API_SECURE,
-        )
+            "timeout": settings.CONVERSION_API_TIMEOUT,
+            "verify": settings.CONVERSION_API_SECURE,
+        }
+
+        if content_type == mime_types.JSON:
+            kwargs["json"] = data
+        else:
+            kwargs["data"] = data
+
+        response = requests.post(**kwargs)
+
         if not response.ok:
             logger.error(
                 "Y-Provider API error: url=%s, status=%d, response=%s",
@@ -158,41 +165,28 @@ class YdocConverter:
             ) from err
 
     def convert_blocks(self, blocks):
-        """Convert a list of blocks into our internal format using an external microservice."""
+        """Convert blocks into internal format using the converter service."""
+
+        if not blocks:
+            raise ValidationError("Input blocks cannot be empty")
+
+        url = f"{settings.Y_PROVIDER_API_BASE_URL}{settings.BLOCKS_CONVERSION_API_ENDPOINT}/"
 
         try:
-            response = requests.post(
-                f"{settings.Y_PROVIDER_API_BASE_URL}{settings.BLOCKS_CONVERSION_API_ENDPOINT}/",
-                json={
-                    "blocks": blocks,
-                },
-                headers={
-                    "Authorization": self.auth_header,
-                    "Content-Type": "application/json",
-                },
-                timeout=settings.CONVERSION_API_TIMEOUT,
-                verify=settings.CONVERSION_API_SECURE,
+            response = self._request(
+                url,
+                {"blocks": blocks},
+                mime_types.JSON,
+                mime_types.JSON,
             )
-            response.raise_for_status()
+
             conversion_response = response.json()
 
         except requests.RequestException as err:
+            logger.exception("Y-Provider blocks conversion error: url=%s", url)
+
             raise ServiceUnavailableError(
                 "Failed to connect to conversion service",
             ) from err
 
-        except ValueError as err:
-            raise InvalidResponseError(
-                "Could not parse conversion service response"
-            ) from err
-
-        try:
-            document_content = conversion_response[
-                settings.CONVERSION_API_CONTENT_FIELD
-            ]
-        except KeyError as err:
-            raise MissingContentError(
-                f"Response missing required field: {settings.CONVERSION_API_CONTENT_FIELD}"
-            ) from err
-
-        return document_content
+        return conversion_response[settings.CONVERSION_API_CONTENT_FIELD]

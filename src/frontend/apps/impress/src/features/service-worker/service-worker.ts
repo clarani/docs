@@ -107,6 +107,7 @@ const FALLBACK = {
 const precacheResources = [
   '/401/',
   '/404/',
+  '/import-notion',
   FALLBACK.offline,
   FALLBACK.images,
   FALLBACK.docs,
