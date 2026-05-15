@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Icon } from '@/components';
+import { Box, DropdownMenu, Icon } from '@/components';
 import { useCreateDoc } from '@/docs/doc-management';
 import { useSkeletonStore } from '@/features/skeletons';
 
@@ -45,17 +45,36 @@ export const LeftPanelHeaderButton = () => {
     createDoc();
   };
 
+  const handleImportNotion = () => {
+    const baseApiUrl = process.env.NEXT_PUBLIC_API_ORIGIN;
+    const notionAuthUrl = `${baseApiUrl}/api/v1.0/notion-import/redirect`;
+    window.location.href = notionAuthUrl;
+  };
+
   const isLoading = isDocCreating || isNavigating;
 
   return (
-    <Button
-      data-testid="new-doc-button"
-      color="brand"
-      onClick={handleClick}
-      icon={<Icon $color="inherit" iconName="add" aria-hidden="true" />}
-      disabled={isLoading}
-    >
-      {t('New doc')}
-    </Button>
+    <Box $direction="row" $align="center">
+      <Button
+        data-testid="new-doc-button"
+        color="brand"
+        onClick={handleClick}
+        icon={<Icon $color="inherit" iconName="add" aria-hidden="true" />}
+        disabled={isLoading}
+      >
+        {t('New doc')}
+      </Button>
+      <DropdownMenu
+        showArrow
+        disabled={isDocCreating}
+        options={[
+          {
+            label: t('Import from Notion'),
+            callback: handleImportNotion,
+            padding: { vertical: 'xs', horizontal: 'md' },
+          },
+        ]}
+      ></DropdownMenu>
+    </Box>
   );
 };

@@ -58,6 +58,11 @@ external_api_router.register(
     basename="resource_server_users",
 )
 
+router.register(
+    "notion-import",
+    viewsets.NotionImportViewSet,
+    basename="notion_import",
+)
 
 urlpatterns = [
     path(

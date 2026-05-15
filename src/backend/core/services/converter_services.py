@@ -114,17 +114,24 @@ class YdocConverter:
 
     def _request(self, url, data, content_type, accept):
         """Make a request to the Y-Provider API."""
-        response = requests.post(
-            url,
-            data=data,
-            headers={
+        kwargs = {
+            "url": url,
+            "headers": {
                 "Authorization": self.auth_header,
                 "Content-Type": content_type,
                 "Accept": accept,
             },
-            timeout=settings.CONVERSION_API_TIMEOUT,
-            verify=settings.CONVERSION_API_SECURE,
-        )
+            "timeout": settings.CONVERSION_API_TIMEOUT,
+            "verify": settings.CONVERSION_API_SECURE,
+        }
+
+        if content_type == mime_types.JSON:
+            kwargs["json"] = data
+        else:
+            kwargs["data"] = data
+
+        response = requests.post(**kwargs)
+
         if not response.ok:
             logger.error(
                 "Y-Provider API error: url=%s, status=%d, response=%s",
@@ -156,3 +163,30 @@ class YdocConverter:
             raise ServiceUnavailableError(
                 f"Failed to connect to YDoc conversion service {content_type}, {accept}",
             ) from err
+
+    def convert_blocks(self, blocks):
+        """Convert blocks into internal format using the converter service."""
+
+        if not blocks:
+            raise ValidationError("Input blocks cannot be empty")
+
+        url = f"{settings.Y_PROVIDER_API_BASE_URL}{settings.BLOCKS_CONVERSION_API_ENDPOINT}/"
+
+        try:
+            response = self._request(
+                url,
+                {"blocks": blocks},
+                mime_types.JSON,
+                mime_types.JSON,
+            )
+
+            conversion_response = response.json()
+
+        except requests.RequestException as err:
+            logger.exception("Y-Provider blocks conversion error: url=%s", url)
+
+            raise ServiceUnavailableError(
+                "Failed to connect to conversion service",
+            ) from err
+
+        return conversion_response[settings.CONVERSION_API_CONTENT_FIELD]

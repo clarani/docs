@@ -43,6 +43,7 @@ export type DropdownMenuProps = {
   label?: string;
   arrowCss?: BoxProps['$css'];
   buttonCss?: BoxProps['$css'];
+  padding?: BoxProps['$padding'];
   disabled?: boolean;
   opened?: boolean;
   topMessage?: string;
@@ -209,7 +210,9 @@ export const DropdownMenu = ({
                 $justify="space-between"
                 $background="var(--c--contextuals--background--surface--primary)"
                 $color={colorsTokens['brand-600']}
-                $padding={{ vertical: 'xs', horizontal: 'base' }}
+                $padding={
+                  option.padding ?? { vertical: 'xs', horizontal: 'base' }
+                }
                 $width="100%"
                 $gap={spacingsTokens['base']}
                 $css={css`

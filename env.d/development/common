@@ -25,6 +25,9 @@ DJANGO_EMAIL_URL_APP="http://localhost:3000"
 # Backend url
 IMPRESS_BASE_URL="http://localhost:8072"
 
+# Frontend url
+FRONTEND_BASE_URL="http://localhost:3000"
+
 # Media
 STORAGES_STATICFILES_BACKEND=django.contrib.staticfiles.storage.StaticFilesStorage
 AWS_S3_ENDPOINT_URL=http://minio:9000

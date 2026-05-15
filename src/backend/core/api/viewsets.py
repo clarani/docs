@@ -24,6 +24,7 @@ from django.db import models as db
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import Greatest, Left, Length
 from django.http import Http404, StreamingHttpResponse
+from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -55,6 +56,7 @@ from core.services.collaboration_services import CollaborationService
 from core.services.converter_services import (
     ConversionError,
     Converter,
+    YdocConverter,
 )
 from core.services.converter_services import (
     ServiceUnavailableError as YProviderServiceUnavailableError,
@@ -62,6 +64,7 @@ from core.services.converter_services import (
 from core.services.converter_services import (
     ValidationError as YProviderValidationError,
 )
+from core.services.notion_import import import_notion
 from core.services.search_indexers import (
     get_document_indexer,
     get_visited_document_ids_of,
@@ -3042,3 +3045,138 @@ class CommentViewSet(
         if not reaction.users.exists():
             reaction.delete()
         return drf.response.Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class NotionImportViewSet(viewsets.GenericViewSet):
+    """Notion import ViewSet."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    throttle_classes = []
+
+    def import_notion_child_page(
+        self, imported_doc, parent_doc, user, imported_docs_by_page_id
+    ):
+        document_content = YdocConverter().convert_blocks(imported_doc.blocks)
+
+        obj = parent_doc.add_child(
+            creator=user,
+            title=imported_doc.page.get_title() or "Child page",
+            content=document_content,
+        )
+
+        models.DocumentAccess.objects.create(
+            document=obj,
+            user=user,
+            role=models.RoleChoices.OWNER,
+        )
+
+        imported_docs_by_page_id[imported_doc.page.id] = obj
+
+        for child in imported_doc.children:
+            self.import_notion_child_page(child, obj, user, imported_docs_by_page_id)
+
+    def import_notion_root_page(self, imported_doc, user, imported_docs_by_page_id):
+        document_content = YdocConverter().convert_blocks(imported_doc.blocks)
+
+        obj = models.Document.add_root(
+            depth=1,
+            creator=user,
+            title=imported_doc.page.get_title() or "Imported Notion page",
+            link_reach=models.LinkReachChoices.RESTRICTED,
+            content=document_content,
+        )
+
+        models.DocumentAccess.objects.create(
+            document=obj,
+            user=user,
+            role=models.RoleChoices.OWNER,
+        )
+
+        imported_docs_by_page_id[imported_doc.page.id] = obj
+
+        for child in imported_doc.children:
+            self.import_notion_child_page(child, obj, user, imported_docs_by_page_id)
+
+    @drf.decorators.action(
+        detail=False,
+        methods=["get"],
+        url_path="redirect",
+    )
+    def redirect(self, request):
+        query = urlencode(
+            {
+                "client_id": settings.NOTION_CLIENT_ID,
+                "response_type": "code",
+                "owner": "user",
+                "redirect_uri": settings.NOTION_REDIRECT_URI,
+            }
+        )
+        return redirect("https://api.notion.com/v1/oauth/authorize?" + query)
+
+    @drf.decorators.action(
+        detail=False,
+        methods=["get"],
+        url_path="callback",
+    )
+    def callback(self, request):
+        """
+        Handle the OAuth callback from Notion and store the access token
+        in session.
+        """
+        code = request.GET.get("code")
+
+        if not code:
+            raise drf.exceptions.ValidationError(
+                {"code": "Missing OAuth authorization code."}
+            )
+
+        response = requests.post(
+            "https://api.notion.com/v1/oauth/token",
+            auth=requests.auth.HTTPBasicAuth(
+                settings.NOTION_CLIENT_ID,
+                settings.NOTION_CLIENT_SECRET,
+            ),
+            headers={"Accept": "application/json"},
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": settings.NOTION_REDIRECT_URI,
+            },
+            timeout=10,
+        )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        request.session["notion_token"] = data["access_token"]
+
+        return redirect(f"{settings.FRONTEND_BASE_URL}/import-notion/")
+
+    @drf.decorators.action(
+        detail=False,
+        methods=["post"],
+        url_path="run",
+    )
+    def run(self, request):
+        """
+        Import documents from Notion using the OAuth access token stored
+        in session.
+        """
+        notion_token = request.session.get("notion_token")
+
+        if not notion_token:
+            raise drf.exceptions.PermissionDenied()
+
+        imported_docs = import_notion(notion_token)
+
+        imported_docs_by_page_id = {}
+
+        for imported_doc in imported_docs:
+            self.import_notion_root_page(
+                imported_doc,
+                request.user,
+                imported_docs_by_page_id,
+            )
+
+        return drf.response.Response({})
